@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MeshCore Emergency Bridge</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; }
+        #map { height: 600px; width: 100%; }
+        #sidebar { position: absolute; top:10px; right:10px; background:rgba(255,255,255,0.9); padding:10px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.3); max-width:320px; max-height:80%; overflow:auto; z-index:1000; }
+        .emergency { background:#ffcccc; margin:5px; padding:5px; border-radius:5px; border-left:5px solid red; }
+        .node { margin:3px 0; }
+        h3 { margin:0 0 8px 0; }
+        hr { margin:10px 0; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="sidebar">
+        <h3>🚨 Emergency Alerts</h3>
+        <div id="emergencies">Loading...</div>
+        <hr>
+        <h3>📍 Nodes</h3>
+        <div id="nodesList">Loading...</div>
+    </div>
+    <script>
+        var map = L.map('map').setView([51.505, -0.09], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
+        }).addTo(map);
+        var markers = {};
+        var polylines = {};
+
+        function fetchNodes() {
+            fetch('/api/nodes')
+                .then(response => response.json())
+                .then(nodes => {
+                    var html = '';
+                    nodes.forEach(node => {
+                        html += `<div class="node"><b>${node.name}</b><br>${node.lat.toFixed(5)}, ${node.lon.toFixed(5)}</div>`;
+                        if (markers[node.id]) {
+                            markers[node.id].setLatLng([node.lat, node.lon]);
+                        } else {
+                            var marker = L.marker([node.lat, node.lon]).addTo(map);
+                            marker.bindPopup(`<b>${node.name}</b><br>${node.lat}, ${node.lon}`);
+                            marker.on('click', () => fetchBreadcrumbs(node.id));
+                            markers[node.id] = marker;
+                        }
+                    });
+                    document.getElementById('nodesList').innerHTML = html || 'No nodes yet';
+                })
+                .catch(err => console.error(err));
+        }
+
+        function fetchEmergencies() {
+            fetch('/api/emergencies')
+                .then(response => response.json())
+                .then(emergencies => {
+                    if (emergencies.length === 0) {
+                        document.getElementById('emergencies').innerHTML = 'No emergencies';
+                        return;
+                    }
+                    var html = '';
+                    emergencies.forEach(e => {
+                        var date = new Date(e.ts * 1000).toLocaleString();
+                        html += `<div class="emergency"><b>${e.src}</b><br>${date}<br>📍 ${e.lat}, ${e.lon}<br>Status: ${e.status}</div>`;
+                    });
+                    document.getElementById('emergencies').innerHTML = html;
+                })
+                .catch(err => console.error(err));
+        }
+
+        function fetchBreadcrumbs(nodeId) {
+            fetch(`/api/breadcrumbs/${nodeId}`)
+                .then(response => response.json())
+                .then(crumbs => {
+                    if (polylines[nodeId]) map.removeLayer(polylines[nodeId]);
+                    if (crumbs.length > 1) {
+                        var points = crumbs.map(c => [c.lat, c.lon]);
+                        var polyline = L.polyline(points, {color: 'blue', weight: 3}).addTo(map);
+                        polylines[nodeId] = polyline;
+                        map.fitBounds(polyline.getBounds());
+                    }
+                })
+                .catch(err => console.error(err));
+        }
+
+        // Refresh every 5 seconds
+        setInterval(() => {
+            fetchNodes();
+            fetchEmergencies();
+        }, 5000);
+
+        fetchNodes();
+        fetchEmergencies();
+    </script>
+</body>
+</html>

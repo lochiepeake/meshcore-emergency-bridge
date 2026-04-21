@@ -1,0 +1,6 @@
+pyserial>=3.5
+flask>=2.0
+requests>=2.25
+twilio>=7.0
+paho-mqtt>=1.6
+# meshcore_py is installed from GitHub (see install script)
