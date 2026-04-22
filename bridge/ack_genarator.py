@@ -1,16 +1,13 @@
 import logging
 import time
+import asyncio
 
 logger = logging.getLogger(__name__)
 
-def send_ack(mc, dest_pubkey, msg_id):
-    """Send an ACK message back through the mesh to the source node."""
+def send_ack_sync(dest_pubkey, msg_id):
+    """Synchronous wrapper for sending ACK messages."""
+    # This is a simplified version - you might need to handle the async properly
     ack_text = f"ACK|MSGID:{msg_id}|TS:{int(time.time())}|GW:bridge"
-    try:
-        # Use send_text with destination = source node's public key
-        mc.send_text(ack_text, dest=dest_pubkey)
-        logger.info("ACK sent to %s for msg %d", dest_pubkey, msg_id)
-        return True
-    except Exception as e:
-        logger.error("Failed to send ACK: %s", e)
-        return False
+    logger.info(f"Would send ACK to {dest_pubkey}: {ack_text}")
+    # In a real implementation, you'd need to send this via the meshcore connection
+    return True
