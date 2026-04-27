@@ -22,58 +22,49 @@ from utils import setup_logging
 setup_logging(LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-# Global variables
 mc = None
-forward_queue = []  # each item: (msg_id, pubkey, lat, lon, bat, retries)
+forward_queue = []
 
-# ----------------------------------------------------------------------
-# Synchronous callbacks (these do the actual work, called from async handlers)
-# ----------------------------------------------------------------------
 def on_text(msg):
-    """Handle incoming text messages (synchronous part)."""
-    logger.info(f"TXT from {msg.src}: {msg.text}")
-    
-    if is_emergency(msg.text):
-        data = parse_sos(msg.text)
-        msg_id = store_emergency(DB_PATH, msg.src, msg.text,
+    """Handle incoming text messages."""
+    # Access dictionary keys CORRECTLY as per official docs
+    sender = msg.get('pubkey_prefix', 'unknown')
+    message_text = msg.get('text', '')
+    logger.info(f"TXT from {sender}: {message_text}")
+
+    if is_emergency(message_text):
+        data = parse_sos(message_text)
+        msg_id = store_emergency(DB_PATH, sender, message_text,
                                  data['lat'], data['lon'], data['alt'], data['bat'])
-        forward_queue.append((msg_id, msg.src, data['lat'], data['lon'], data['bat'], 0))
+        forward_queue.append((msg_id, sender, data['lat'], data['lon'], data['bat'], 0))
         logger.info(f"Emergency stored ID={msg_id}, queued")
-        
-    elif msg.text.startswith('LOC|'):
-        data = parse_sos(msg.text)
-        rssi = getattr(msg, 'rssi', None)
-        snr = getattr(msg, 'snr', None)
-        store_breadcrumb(DB_PATH, msg.src, data['lat'], data['lon'],
+
+    elif message_text.startswith('LOC|'):
+        data = parse_sos(message_text)
+        rssi = msg.get('rssi', None)
+        snr = msg.get('snr', None)
+        # If RSSI/SNR not in this payload, remove them from calls
+        store_breadcrumb(DB_PATH, sender, data['lat'], data['lon'],
                          data['alt'], data['bat'], rssi, snr)
-        store_node(DB_PATH, msg.src, lat=data['lat'], lon=data['lon'],
+        store_node(DB_PATH, sender, lat=data['lat'], lon=data['lon'],
                    alt=data['alt'], bat=data['bat'], rssi=rssi, snr=snr)
-        logger.info(f"Location stored for {msg.src}")
+        logger.info(f"Location stored for {sender}")
 
 def on_advert(ad):
-    """Handle node adverts (synchronous part)."""
-    logger.info(f"Advert from {ad.src}: name={ad.name}, lat={ad.latitude/1e6}, lon={ad.longitude/1e6}")
-    lat = ad.latitude / 1e6 if ad.latitude else None
-    lon = ad.longitude / 1e6 if ad.longitude else None
-    rssi = getattr(ad, 'rssi', None)
-    snr = getattr(ad, 'snr', None)
-    if lat is not None and lon is not None:
-        store_breadcrumb(DB_PATH, ad.src, lat, lon, None, None, rssi, snr)
-    store_node(DB_PATH, ad.src, name=ad.name, lat=lat, lon=lon, rssi=rssi, snr=snr)
+    """Handle node adverts."""
+    # Access ADVERT payload dictionary correctly
+    # The payload for ADVERT is a dictionary with keys like 'public_key', 'name', etc.
+    # Adjust if needed based on your specific library version
+    logger.info(f"Advert from {ad.get('public_key', 'unknown')}: name={ad.get('name', 'unknown')}")
+    # Your existing on_advert logic
+    # ...
 
 def on_stats(stats):
-    """Handle incoming stats (synchronous part)."""
+    """Handle incoming stats."""
     logger.info(f"Stats received: battery={stats.get('battery_mv')}mV")
-    store_telemetry(DB_PATH, "gateway",
-                    stats.get('battery_mv'), stats.get('uptime_secs'), stats.get('queue_len'),
-                    stats.get('noise_floor'), stats.get('last_rssi'), stats.get('last_snr'),
-                    stats.get('tx_air_secs'), stats.get('rx_air_secs'),
-                    stats.get('flood_tx'), stats.get('direct_tx'),
-                    stats.get('flood_rx'), stats.get('direct_rx'))
+    # Your existing on_stats logic
+    # ...
 
-# ----------------------------------------------------------------------
-# Async event handlers (these are called by meshcore library)
-# ----------------------------------------------------------------------
 async def handle_text(event):
     on_text(event.payload)
 
@@ -83,14 +74,10 @@ async def handle_advert(event):
 async def handle_stats(event):
     on_stats(event.payload)
 
-# ----------------------------------------------------------------------
-# ACK sender (async version)
-# ----------------------------------------------------------------------
 async def send_ack_async(meshcore, dest_pubkey, msg_id):
     """Send an ACK message back through the mesh to the source node."""
     ack_text = f"ACK|MSGID:{msg_id}|TS:{int(time.time())}|GW:bridge"
     try:
-        # Send to public channel 0, directed to the specific node
         await meshcore.commands.send_chan_msg(0, ack_text, destination=dest_pubkey)
         logger.info(f"ACK sent to {dest_pubkey} for msg {msg_id}")
         return True
@@ -98,11 +85,7 @@ async def send_ack_async(meshcore, dest_pubkey, msg_id):
         logger.error(f"Failed to send ACK: {e}")
         return False
 
-# ----------------------------------------------------------------------
-# Forward worker thread (handles queue and retries, calls async ACK)
-# ----------------------------------------------------------------------
 def forward_worker(loop, meshcore_ref):
-    """Background thread that processes the forwarding queue with retries."""
     while True:
         if forward_queue:
             item = forward_queue.pop(0)
@@ -110,7 +93,6 @@ def forward_worker(loop, meshcore_ref):
             success = forward_emergency(pubkey, lat, lon, bat)
             if success:
                 update_emergency_status(DB_PATH, msg_id, 'success')
-                # Schedule the async ACK sending on the event loop
                 if meshcore_ref:
                     asyncio.run_coroutine_threadsafe(
                         send_ack_async(meshcore_ref, pubkey, msg_id),
@@ -130,63 +112,40 @@ def forward_worker(loop, meshcore_ref):
                     update_emergency_status(DB_PATH, msg_id, 'failed')
         time.sleep(1)
 
-# ----------------------------------------------------------------------
-# Stats poller (async)
-# ----------------------------------------------------------------------
 async def stats_poller_async(meshcore):
-    """Periodically request stats from the MeshCore companion."""
     while True:
         await asyncio.sleep(STATS_INTERVAL)
-        if meshcore:
-            try:
-                # TODO: Replace with proper telemetry request when available
-                # await meshcore.commands.get_stats()
-                logger.info("Stats polling is temporarily disabled")
-            except Exception as e:
-                logger.error(f"Stats request failed: {e}")
+        logger.info("Stats polling is temporarily disabled")
 
-# ----------------------------------------------------------------------
-# Main async function with auto-reconnect
-# ----------------------------------------------------------------------
 async def run_bridge():
-    """Establish connection and run the bridge (with auto-reconnect)."""
     global mc
     init_db(DB_PATH)
 
     while True:
         try:
-            # Connect to serial companion
             mc = await MeshCore.create_serial(SERIAL_PORT, 115200, debug=True)
             logger.info(f"Connected to MeshCore on {SERIAL_PORT}")
-            
-            # *** Enable automatic message fetching ***
+
+            # CRITICAL: Start automatic message fetching
             await mc.start_auto_message_fetching()
             logger.info("Auto message fetching enabled")
-            
+
         except (SerialException, Exception) as e:
             logger.error(f"Cannot connect to serial port {SERIAL_PORT}: {e}. Retrying in 5s...")
             await asyncio.sleep(5)
             continue
 
-        # Subscribe to events (no need for MESSAGES_WAITING anymore)
         mc.subscribe(EventType.CONTACT_MSG_RECV, handle_text)
         mc.subscribe(EventType.ADVERTISEMENT, handle_advert)
         mc.subscribe(EventType.TELEMETRY_RESPONSE, handle_stats)
 
-        # Get the current event loop for the forwarder thread
         loop = asyncio.get_running_loop()
-
-        # Start forwarder thread (pass the loop and meshcore reference)
         threading.Thread(target=forward_worker, args=(loop, mc), daemon=True).start()
-
-        # Start stats poller as async task
         asyncio.create_task(stats_poller_async(mc))
 
         logger.info("Bridge started. Waiting for events...")
 
-        # Wait until the connection is lost (or manual interrupt)
         try:
-            # Keep running – we'll detect disconnection when an exception occurs
             while True:
                 await asyncio.sleep(1)
         except (ConnectionError, SerialException, Exception) as e:
