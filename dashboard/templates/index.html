@@ -7,93 +7,291 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin:0; padding:0; font-family: Arial, Helvetica, sans-serif; }
-        #map { height: 600px; width: 100%; }
-        #sidebar { position: absolute; top:10px; right:10px; background:rgba(255,255,255,0.9); padding:10px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.3); max-width:320px; max-height:80%; overflow:auto; z-index:1000; }
-        .emergency { background:#ffcccc; margin:5px; padding:5px; border-radius:5px; border-left:5px solid red; }
-        .node { margin:3px 0; }
-        h3 { margin:0 0 8px 0; }
-        hr { margin:10px 0; }
+        body { margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { height: 100vh; width: calc(100% - 380px); float: right; }
+        #sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 380px;
+            height: 100%;
+            background: rgba(30,30,40,0.95);
+            backdrop-filter: blur(8px);
+            color: #eee;
+            padding: 15px;
+            overflow-y: auto;
+            box-shadow: 2px 0 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            font-size: 14px;
+        }
+        #sidebar h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #ff5555;
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+        .emergency-card {
+            background: #2a2a2e;
+            border-left: 5px solid #ff5555;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .emergency-card:hover {
+            transform: translateX(5px);
+            background: #3a3a40;
+        }
+        .emergency-card.resolved {
+            border-left-color: #4caf50;
+            opacity: 0.7;
+        }
+        .emergency-card.acknowledged {
+            border-left-color: #ffaa33;
+        }
+        .emergency-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .emergency-src {
+            font-size: 1.1em;
+        }
+        .emergency-status {
+            font-size: 0.8em;
+            padding: 2px 6px;
+            border-radius: 12px;
+            background: #555;
+        }
+        .emergency-status.pending { background: #ff5555; }
+        .emergency-status.success { background: #4caf50; }
+        .emergency-status.failed { background: #888; }
+        .emergency-status.acknowledged { background: #ffaa33; color: #222; }
+        .emergency-details {
+            font-size: 0.85em;
+            color: #ccc;
+            margin: 5px 0;
+        }
+        .emergency-actions {
+            margin-top: 8px;
+            text-align: right;
+        }
+        select, button {
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #666;
+        }
+        .no-emergencies {
+            color: #aaa;
+            font-style: italic;
+            text-align: center;
+            margin-top: 20px;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #222;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div id="sidebar">
         <h3>🚨 Emergency Alerts</h3>
-        <div id="emergencies">Loading...</div>
-        <hr>
-        <h3>📍 Nodes</h3>
-        <div id="nodesList">Loading...</div>
+        <div id="emergenciesList">Loading...</div>
     </div>
+
     <script>
         var map = L.map('map').setView([51.505, -0.09], 8);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
         }).addTo(map);
-        var markers = {};
-        var polylines = {};
-
-        function fetchNodes() {
-            fetch('/api/nodes')
-                .then(response => response.json())
-                .then(nodes => {
-                    var html = '';
-                    nodes.forEach(node => {
-                        html += `<div class="node"><b>${node.name}</b><br>${node.lat.toFixed(5)}, ${node.lon.toFixed(5)}</div>`;
-                        if (markers[node.id]) {
-                            markers[node.id].setLatLng([node.lat, node.lon]);
-                        } else {
-                            var marker = L.marker([node.lat, node.lon]).addTo(map);
-                            marker.bindPopup(`<b>${node.name}</b><br>${node.lat}, ${node.lon}`);
-                            marker.on('click', () => fetchBreadcrumbs(node.id));
-                            markers[node.id] = marker;
+        
+        // Store markers and lines for later removal/updates
+        var markers = {};          // key: emergency_id
+        var polylines = {};        // key: src_full (public key)
+        var emergenciesData = [];   // store latest emergency objects
+        
+        // Helper: change status via API
+        async function updateEmergencyStatus(emergencyId, newStatus) {
+            try {
+                const response = await fetch(`/api/emergencies/${emergencyId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    // Refresh the dashboard after successful update
+                    fetchEmergencies();
+                } else {
+                    console.error('Status update failed', data);
+                }
+            } catch (err) {
+                console.error('Error updating status:', err);
+            }
+        }
+        
+        // Draw lines connecting emergencies of the same source (ordered by timestamp)
+        function drawTrailLines(emergencies) {
+            // Group emergencies by full_src
+            const groups = {};
+            emergencies.forEach(em => {
+                if (!groups[em.full_src]) groups[em.full_src] = [];
+                groups[em.full_src].push(em);
+            });
+            
+            // For each group, sort by timestamp and draw polyline
+            for (const src in groups) {
+                const points = groups[src]
+                    .filter(e => e.lat && e.lon)   // have valid coordinates
+                    .sort((a,b) => a.ts - b.ts)
+                    .map(e => [e.lat, e.lon]);
+                
+                if (polylines[src]) map.removeLayer(polylines[src]);
+                if (points.length >= 2) {
+                    const line = L.polyline(points, { color: '#ffaa33', weight: 3, opacity: 0.7 }).addTo(map);
+                    polylines[src] = line;
+                } else if (points.length === 1) {
+                    // Just a marker, no line needed – but we keep no polyline
+                    delete polylines[src];
+                } else {
+                    delete polylines[src];
+                }
+            }
+        }
+        
+        // Create or update markers for emergencies and show popup with status changer
+        function updateMarkers(emergencies) {
+            // Remove markers that no longer exist
+            const currentIds = new Set(emergencies.map(e => e.id));
+            for (const id in markers) {
+                if (!currentIds.has(parseInt(id))) {
+                    map.removeLayer(markers[id]);
+                    delete markers[id];
+                }
+            }
+            
+            // Add/update markers
+            emergencies.forEach(em => {
+                if (!em.lat || !em.lon) return;
+                const popupContent = `
+                    <div style="min-width:160px;">
+                        <b>${em.src}</b><br>
+                        📍 ${em.lat}, ${em.lon}<br>
+                        🕒 ${new Date(em.ts * 1000).toLocaleString()}<br>
+                        Status: <span style="color:${em.status === 'success' ? 'green' : (em.status === 'pending' ? 'orange' : 'gray')}">${em.status}</span><br>
+                        <select id="statusSelect_${em.id}" style="margin-top:5px;">
+                            <option value="pending" ${em.status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="success" ${em.status === 'success' ? 'selected' : ''}>Success</option>
+                            <option value="failed" ${em.status === 'failed' ? 'selected' : ''}>Failed</option>
+                            <option value="acknowledged" ${em.status === 'acknowledged' ? 'selected' : ''}>Acknowledged</option>
+                            <option value="resolved" ${em.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+                        </select>
+                        <button onclick="updateEmergencyStatus(${em.id}, document.getElementById('statusSelect_${em.id}').value)">Update</button>
+                    </div>
+                `;
+                if (markers[em.id]) {
+                    markers[em.id].setLatLng([em.lat, em.lon]);
+                    markers[em.id].setPopupContent(popupContent);
+                } else {
+                    const marker = L.marker([em.lat, em.lon]).addTo(map);
+                    marker.bindPopup(popupContent);
+                    markers[em.id] = marker;
+                }
+            });
+        }
+        
+        // Render sidebar emergencies list with inline status changer
+        function renderSidebar(emergencies) {
+            const container = document.getElementById('emergenciesList');
+            if (!emergencies.length) {
+                container.innerHTML = '<div class="no-emergencies">No emergencies received yet.</div>';
+                return;
+            }
+            let html = '';
+            // Show most recent first in sidebar
+            const sorted = [...emergencies].sort((a,b) => b.ts - a.ts);
+            sorted.forEach(em => {
+                const dateStr = new Date(em.ts * 1000).toLocaleString();
+                const statusClass = em.status === 'success' ? 'success' : (em.status === 'pending' ? 'pending' : (em.status === 'acknowledged' ? 'acknowledged' : 'failed'));
+                html += `
+                    <div class="emergency-card ${em.status === 'resolved' ? 'resolved' : ''}" data-id="${em.id}" data-lat="${em.lat}" data-lon="${em.lon}">
+                        <div class="emergency-header">
+                            <span class="emergency-src">${em.src}</span>
+                            <span class="emergency-status ${statusClass}">${em.status}</span>
+                        </div>
+                        <div class="emergency-details">
+                            📍 ${em.lat}, ${em.lon}<br>
+                            🕒 ${dateStr}
+                        </div>
+                        <div class="emergency-actions">
+                            <select id="sidebar_status_${em.id}" class="status-select">
+                                <option value="pending" ${em.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="success" ${em.status === 'success' ? 'selected' : ''}>Success</option>
+                                <option value="failed" ${em.status === 'failed' ? 'selected' : ''}>Failed</option>
+                                <option value="acknowledged" ${em.status === 'acknowledged' ? 'selected' : ''}>Acknowledged</option>
+                                <option value="resolved" ${em.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+                            </select>
+                            <button onclick="updateEmergencyStatus(${em.id}, document.getElementById('sidebar_status_${em.id}').value)">Update</button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            
+            // Add click event on each card to fly to the emergency location on map
+            document.querySelectorAll('.emergency-card').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    // Prevent flying if clicking on select or button
+                    if (e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
+                    const lat = parseFloat(card.dataset.lat);
+                    const lon = parseFloat(card.dataset.lon);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        map.flyTo([lat, lon], 14);
+                        // Open popup of the corresponding marker if exists
+                        const id = parseInt(card.dataset.id);
+                        if (markers[id]) {
+                            markers[id].openPopup();
                         }
-                    });
-                    document.getElementById('nodesList').innerHTML = html || 'No nodes yet';
-                })
-                .catch(err => console.error(err));
-        }
-
-        function fetchEmergencies() {
-            fetch('/api/emergencies')
-                .then(response => response.json())
-                .then(emergencies => {
-                    if (emergencies.length === 0) {
-                        document.getElementById('emergencies').innerHTML = 'No emergencies';
-                        return;
                     }
-                    var html = '';
-                    emergencies.forEach(e => {
-                        var date = new Date(e.ts * 1000).toLocaleString();
-                        html += `<div class="emergency"><b>${e.src}</b><br>${date}<br>📍 ${e.lat}, ${e.lon}<br>Status: ${e.status}</div>`;
-                    });
-                    document.getElementById('emergencies').innerHTML = html;
-                })
-                .catch(err => console.error(err));
+                });
+            });
         }
-
-        function fetchBreadcrumbs(nodeId) {
-            fetch(`/api/breadcrumbs/${nodeId}`)
-                .then(response => response.json())
-                .then(crumbs => {
-                    if (polylines[nodeId]) map.removeLayer(polylines[nodeId]);
-                    if (crumbs.length > 1) {
-                        var points = crumbs.map(c => [c.lat, c.lon]);
-                        var polyline = L.polyline(points, {color: 'blue', weight: 3}).addTo(map);
-                        polylines[nodeId] = polyline;
-                        map.fitBounds(polyline.getBounds());
-                    }
-                })
-                .catch(err => console.error(err));
+        
+        // Main fetch function
+        async function fetchEmergencies() {
+            try {
+                const response = await fetch('/api/emergencies');
+                const emergencies = await response.json();
+                emergenciesData = emergencies;
+                updateMarkers(emergencies);
+                drawTrailLines(emergencies);
+                renderSidebar(emergencies);
+            } catch (err) {
+                console.error('Failed to fetch emergencies:', err);
+            }
         }
-
+        
         // Refresh every 5 seconds
-        setInterval(() => {
-            fetchNodes();
-            fetchEmergencies();
-        }, 5000);
-
-        fetchNodes();
+        setInterval(fetchEmergencies, 5000);
+        
+        // Initial load
         fetchEmergencies();
     </script>
 </body>
