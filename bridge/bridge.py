@@ -141,6 +141,7 @@ async def stats_poller_async(meshcore):
         if meshcore:
             try:
                 #COMMENTED OUT DONT FORGETawait meshcore.commands.get_stats()
+                logger.info("Stats polling is temporarily disabled")
             except Exception as e:
                 logger.error(f"Stats request failed: {e}")
 
