@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
+
 import asyncio
 import threading
 import time
 import logging
 import sys
 import os
-import json
 from meshcore import MeshCore, EventType
+from serial import SerialException
 
 # Add parent directory to path if needed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +17,6 @@ from database import (init_db, store_node, store_breadcrumb, store_emergency,
                       update_emergency_status, increment_emergency_retries, store_telemetry)
 from emergency_classifier import is_emergency, parse_sos
 from forwarder import forward_emergency
-from ack_generator import send_ack_sync
 from utils import setup_logging
 
 setup_logging(LOG_LEVEL)
@@ -27,8 +26,11 @@ logger = logging.getLogger(__name__)
 mc = None
 forward_queue = []  # each item: (msg_id, pubkey, lat, lon, bat, retries)
 
+# ----------------------------------------------------------------------
+# Synchronous callbacks (these do the actual work, called from async handlers)
+# ----------------------------------------------------------------------
 def on_text(msg):
-    """Handle incoming text messages."""
+    """Handle incoming text messages (synchronous part)."""
     logger.info(f"TXT from {msg.src}: {msg.text}")
     
     if is_emergency(msg.text):
@@ -49,7 +51,7 @@ def on_text(msg):
         logger.info(f"Location stored for {msg.src}")
 
 def on_advert(ad):
-    """Handle node adverts (contain location and name)."""
+    """Handle node adverts (synchronous part)."""
     logger.info(f"Advert from {ad.src}: name={ad.name}, lat={ad.latitude/1e6}, lon={ad.longitude/1e6}")
     lat = ad.latitude / 1e6 if ad.latitude else None
     lon = ad.longitude / 1e6 if ad.longitude else None
@@ -60,7 +62,7 @@ def on_advert(ad):
     store_node(DB_PATH, ad.src, name=ad.name, lat=lat, lon=lon, rssi=rssi, snr=snr)
 
 def on_stats(stats):
-    """Handle incoming stats from companion."""
+    """Handle incoming stats (synchronous part)."""
     logger.info(f"Stats received: battery={stats.get('battery_mv')}mV")
     store_telemetry(DB_PATH, "gateway",
                     stats.get('battery_mv'), stats.get('uptime_secs'), stats.get('queue_len'),
@@ -69,8 +71,39 @@ def on_stats(stats):
                     stats.get('flood_tx'), stats.get('direct_tx'),
                     stats.get('flood_rx'), stats.get('direct_rx'))
 
-def forward_worker():
+# ----------------------------------------------------------------------
+# Async event handlers (these are called by meshcore library)
+# ----------------------------------------------------------------------
+async def handle_text(event):
+    on_text(event.payload)
+
+async def handle_advert(event):
+    on_advert(event.payload)
+
+async def handle_stats(event):
+    on_stats(event.payload)
+
+# ----------------------------------------------------------------------
+# ACK sender (async version)
+# ----------------------------------------------------------------------
+async def send_ack_async(meshcore, dest_pubkey, msg_id):
+    """Send an ACK message back through the mesh to the source node."""
+    ack_text = f"ACK|MSGID:{msg_id}|TS:{int(time.time())}|GW:bridge"
+    try:
+        # Send to public channel 0, directed to the specific node
+        await meshcore.commands.send_chan_msg(0, ack_text, destination=dest_pubkey)
+        logger.info(f"ACK sent to {dest_pubkey} for msg {msg_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send ACK: {e}")
+        return False
+
+# ----------------------------------------------------------------------
+# Forward worker thread (handles queue and retries, calls async ACK)
+# ----------------------------------------------------------------------
+def forward_worker(loop, meshcore_ref):
     """Background thread that processes the forwarding queue with retries."""
+    global mc
     while True:
         if forward_queue:
             item = forward_queue.pop(0)
@@ -78,8 +111,12 @@ def forward_worker():
             success = forward_emergency(pubkey, lat, lon, bat)
             if success:
                 update_emergency_status(DB_PATH, msg_id, 'success')
-                # Send ACK synchronously
-                send_ack_sync(pubkey, msg_id)
+                # Schedule the async ACK sending on the event loop
+                if meshcore_ref:
+                    asyncio.run_coroutine_threadsafe(
+                        send_ack_async(meshcore_ref, pubkey, msg_id),
+                        loop
+                    )
             else:
                 new_retries = increment_emergency_retries(DB_PATH, msg_id)
                 if new_retries <= MAX_RETRIES:
@@ -94,57 +131,77 @@ def forward_worker():
                     update_emergency_status(DB_PATH, msg_id, 'failed')
         time.sleep(1)
 
-async def stats_poller_async():
+# ----------------------------------------------------------------------
+# Stats poller (async)
+# ----------------------------------------------------------------------
+async def stats_poller_async(meshcore):
     """Periodically request stats from the MeshCore companion."""
-    global mc
     while True:
         await asyncio.sleep(STATS_INTERVAL)
-        if mc:
+        if meshcore:
             try:
-                await mc.commands.get_stats()
+                await meshcore.commands.get_stats()
             except Exception as e:
                 logger.error(f"Stats request failed: {e}")
 
-async def main_async():
+# ----------------------------------------------------------------------
+# Main async function with auto-reconnect
+# ----------------------------------------------------------------------
+async def run_bridge():
+    """Establish connection and run the bridge (with auto-reconnect)."""
     global mc
     init_db(DB_PATH)
-    
-    try:
-        # Use the correct async API
-        mc = await MeshCore.create_serial(SERIAL_PORT, 115200, debug=True)
-        logger.info(f"Connected to MeshCore on {SERIAL_PORT}")
-    except Exception as e:
-        logger.error(f"Cannot connect to serial port {SERIAL_PORT}: {e}")
-        return
-    
-    # Set up event handlers
-    @mc.on(EventType.TEXT_MESSAGE)
-    async def handle_text(event):
-        on_text(event.payload)
-    
-    @mc.on(EventType.ADVERT)
-    async def handle_advert(event):
-        on_advert(event.payload)
-    
-    @mc.on(EventType.STATS)
-    async def handle_stats(event):
-        on_stats(event.payload)
-    
-    # Start forwarder thread
-    threading.Thread(target=forward_worker, daemon=True).start()
-    
-    # Start stats poller as async task
-    asyncio.create_task(stats_poller_async())
-    
-    logger.info("Bridge started. Listening for events...")
-    
-    # Keep the connection alive
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
+
+    while True:
+        try:
+            # Connect to serial companion
+            mc = await MeshCore.create_serial(SERIAL_PORT, 115200, debug=True)
+            logger.info(f"Connected to MeshCore on {SERIAL_PORT}")
+        except (SerialException, Exception) as e:
+            logger.error(f"Cannot connect to serial port {SERIAL_PORT}: {e}. Retrying in 5s...")
+            await asyncio.sleep(5)
+            continue
+
+        # Subscribe to events
+        mc.subscribe(EventType.TEXT_MESSAGE, handle_text)
+        mc.subscribe(EventType.ADVERT, handle_advert)
+        mc.subscribe(EventType.STATS, handle_stats)
+
+        # Get the current event loop for the forwarder thread
+        loop = asyncio.get_running_loop()
+
+        # Start forwarder thread (pass the loop and meshcore reference)
+        threading.Thread(target=forward_worker, args=(loop, mc), daemon=True).start()
+
+        # Start stats poller as async task
+        asyncio.create_task(stats_poller_async(mc))
+
+        logger.info("Bridge started. Waiting for events...")
+
+        # Wait until the connection is lost (or manual interrupt)
+        try:
+            # Keep running – we'll detect disconnection when an exception occurs
+            # in one of the background tasks. For simplicity, sleep forever.
+            while True:
+                await asyncio.sleep(1)
+        except (ConnectionError, SerialException, Exception) as e:
+            logger.error(f"Connection lost: {e}. Reconnecting...")
+            try:
+                await mc.disconnect()
+            except:
+                pass
+            mc = None
+            await asyncio.sleep(5)
+            continue
+        except KeyboardInterrupt:
+            break
+
+    if mc:
         await mc.disconnect()
+        logger.info("Bridge shut down.")
+
+async def main_async():
+    await run_bridge()
 
 def main():
     asyncio.run(main_async())
