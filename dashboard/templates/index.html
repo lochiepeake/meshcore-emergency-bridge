@@ -178,7 +178,6 @@
         
         // Create or update markers for emergencies and show popup with status changer
         function updateMarkers(emergencies) {
-            // Remove markers that no longer exist
             const currentIds = new Set(emergencies.map(e => e.id));
             for (const id in markers) {
                 if (!currentIds.has(parseInt(id))) {
@@ -186,6 +185,23 @@
                     delete markers[id];
                 }
             }
+            
+            emergencies.forEach(em => {
+                if (!em.lat || !em.lon) {
+                    console.warn(`Emergency ${em.id} has invalid coordinates (${em.lat}, ${em.lon}) – skipping marker`);
+                    return;
+                }
+                const popupContent = `...`; // unchanged
+                if (markers[em.id]) {
+                    markers[em.id].setLatLng([em.lat, em.lon]);
+                    markers[em.id].setPopupContent(popupContent);
+                } else {
+                    const marker = L.marker([em.lat, em.lon]).addTo(map);
+                    marker.bindPopup(popupContent);
+                    markers[em.id] = marker;
+                }
+            });
+        }
             
             // Add/update markers
             emergencies.forEach(em => {
