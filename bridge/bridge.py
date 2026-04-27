@@ -83,14 +83,6 @@ async def handle_advert(event):
 async def handle_stats(event):
     on_stats(event.payload)
 
-async def handle_messages_waiting(event):
-    """When the companion indicates new messages, sync them."""
-    try:
-        await mc.commands.sync_msgs()
-        logger.debug("Synced messages after MESSAGES_WAITING")
-    except Exception as e:
-        logger.error(f"Failed to sync messages: {e}")
-
 # ----------------------------------------------------------------------
 # ACK sender (async version)
 # ----------------------------------------------------------------------
@@ -111,7 +103,6 @@ async def send_ack_async(meshcore, dest_pubkey, msg_id):
 # ----------------------------------------------------------------------
 def forward_worker(loop, meshcore_ref):
     """Background thread that processes the forwarding queue with retries."""
-    global mc
     while True:
         if forward_queue:
             item = forward_queue.pop(0)
@@ -148,7 +139,8 @@ async def stats_poller_async(meshcore):
         await asyncio.sleep(STATS_INTERVAL)
         if meshcore:
             try:
-                #COMMENTED OUT DONT FORGETawait meshcore.commands.get_stats()
+                # TODO: Replace with proper telemetry request when available
+                # await meshcore.commands.get_stats()
                 logger.info("Stats polling is temporarily disabled")
             except Exception as e:
                 logger.error(f"Stats request failed: {e}")
@@ -166,16 +158,20 @@ async def run_bridge():
             # Connect to serial companion
             mc = await MeshCore.create_serial(SERIAL_PORT, 115200, debug=True)
             logger.info(f"Connected to MeshCore on {SERIAL_PORT}")
+            
+            # *** Enable automatic message fetching ***
+            await mc.start_auto_message_fetching()
+            logger.info("Auto message fetching enabled")
+            
         except (SerialException, Exception) as e:
             logger.error(f"Cannot connect to serial port {SERIAL_PORT}: {e}. Retrying in 5s...")
             await asyncio.sleep(5)
             continue
 
-        # Subscribe to events
+        # Subscribe to events (no need for MESSAGES_WAITING anymore)
         mc.subscribe(EventType.CONTACT_MSG_RECV, handle_text)
         mc.subscribe(EventType.ADVERTISEMENT, handle_advert)
         mc.subscribe(EventType.TELEMETRY_RESPONSE, handle_stats)
-        mc.subscribe(EventType.MESSAGES_WAITING, handle_messages_waiting)
 
         # Get the current event loop for the forwarder thread
         loop = asyncio.get_running_loop()
@@ -191,7 +187,6 @@ async def run_bridge():
         # Wait until the connection is lost (or manual interrupt)
         try:
             # Keep running – we'll detect disconnection when an exception occurs
-            # in one of the background tasks. For simplicity, sleep forever.
             while True:
                 await asyncio.sleep(1)
         except (ConnectionError, SerialException, Exception) as e:
