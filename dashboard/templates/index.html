@@ -122,12 +122,10 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
         }).addTo(map);
         
-        // Store markers and lines for later removal/updates
-        var markers = {};          // key: emergency_id
-        var polylines = {};        // key: src_full (public key)
-        var emergenciesData = [];   // store latest emergency objects
+        var markers = {};
+        var polylines = {};
+        var emergenciesData = [];
         
-        // Helper: change status via API
         async function updateEmergencyStatus(emergencyId, newStatus) {
             try {
                 const response = await fetch(`/api/emergencies/${emergencyId}/status`, {
@@ -137,7 +135,6 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    // Refresh the dashboard after successful update
                     fetchEmergencies();
                 } else {
                     console.error('Status update failed', data);
@@ -147,36 +144,28 @@
             }
         }
         
-        // Draw lines connecting emergencies of the same source (ordered by timestamp)
         function drawTrailLines(emergencies) {
-            // Group emergencies by full_src
             const groups = {};
             emergencies.forEach(em => {
+                if (!em.full_src) return;
                 if (!groups[em.full_src]) groups[em.full_src] = [];
                 groups[em.full_src].push(em);
             });
-            
-            // For each group, sort by timestamp and draw polyline
             for (const src in groups) {
                 const points = groups[src]
-                    .filter(e => e.lat && e.lon)   // have valid coordinates
+                    .filter(e => e.lat && e.lon)
                     .sort((a,b) => a.ts - b.ts)
                     .map(e => [e.lat, e.lon]);
-                
                 if (polylines[src]) map.removeLayer(polylines[src]);
                 if (points.length >= 2) {
                     const line = L.polyline(points, { color: '#ffaa33', weight: 3, opacity: 0.7 }).addTo(map);
                     polylines[src] = line;
-                } else if (points.length === 1) {
-                    // Just a marker, no line needed – but we keep no polyline
-                    delete polylines[src];
                 } else {
                     delete polylines[src];
                 }
             }
         }
         
-        // Create or update markers for emergencies and show popup with status changer
         function updateMarkers(emergencies) {
             const currentIds = new Set(emergencies.map(e => e.id));
             for (const id in markers) {
@@ -185,27 +174,11 @@
                     delete markers[id];
                 }
             }
-            
             emergencies.forEach(em => {
                 if (!em.lat || !em.lon) {
                     console.warn(`Emergency ${em.id} has invalid coordinates (${em.lat}, ${em.lon}) – skipping marker`);
                     return;
                 }
-                const popupContent = `...`; // unchanged
-                if (markers[em.id]) {
-                    markers[em.id].setLatLng([em.lat, em.lon]);
-                    markers[em.id].setPopupContent(popupContent);
-                } else {
-                    const marker = L.marker([em.lat, em.lon]).addTo(map);
-                    marker.bindPopup(popupContent);
-                    markers[em.id] = marker;
-                }
-            });
-        }
-            
-            // Add/update markers
-            emergencies.forEach(em => {
-                if (!em.lat || !em.lon) return;
                 const popupContent = `
                     <div style="min-width:160px;">
                         <b>${em.src}</b><br>
@@ -233,7 +206,6 @@
             });
         }
         
-        // Render sidebar emergencies list with inline status changer
         function renderSidebar(emergencies) {
             const container = document.getElementById('emergenciesList');
             if (!emergencies.length) {
@@ -241,7 +213,6 @@
                 return;
             }
             let html = '';
-            // Show most recent first in sidebar
             const sorted = [...emergencies].sort((a,b) => b.ts - a.ts);
             sorted.forEach(em => {
                 const dateStr = new Date(em.ts * 1000).toLocaleString();
@@ -271,16 +242,13 @@
             });
             container.innerHTML = html;
             
-            // Add click event on each card to fly to the emergency location on map
             document.querySelectorAll('.emergency-card').forEach(card => {
                 card.addEventListener('click', (e) => {
-                    // Prevent flying if clicking on select or button
                     if (e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
                     const lat = parseFloat(card.dataset.lat);
                     const lon = parseFloat(card.dataset.lon);
                     if (!isNaN(lat) && !isNaN(lon)) {
                         map.flyTo([lat, lon], 14);
-                        // Open popup of the corresponding marker if exists
                         const id = parseInt(card.dataset.id);
                         if (markers[id]) {
                             markers[id].openPopup();
@@ -290,7 +258,6 @@
             });
         }
         
-        // Main fetch function
         async function fetchEmergencies() {
             try {
                 const response = await fetch('/api/emergencies');
@@ -304,10 +271,7 @@
             }
         }
         
-        // Refresh every 5 seconds
         setInterval(fetchEmergencies, 5000);
-        
-        // Initial load
         fetchEmergencies();
     </script>
 </body>
