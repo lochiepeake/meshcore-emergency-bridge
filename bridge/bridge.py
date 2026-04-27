@@ -166,7 +166,7 @@ async def run_bridge():
         # Subscribe to events
         mc.subscribe(EventType.CONTACT_MSG_RECV, handle_text)
         mc.subscribe(EventType.ADVERTISEMENT, handle_advert)
-        mc.subscribe(EventType.TELEMETRY, handle_stats)
+        mc.subscribe(EventType.TELEMETRY_RESPONSE, handle_stats)
 
         # Get the current event loop for the forwarder thread
         loop = asyncio.get_running_loop()
