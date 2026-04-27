@@ -83,6 +83,14 @@ async def handle_advert(event):
 async def handle_stats(event):
     on_stats(event.payload)
 
+async def handle_messages_waiting(event):
+    """When the companion indicates new messages, sync them."""
+    try:
+        await mc.commands.sync_msgs()
+        logger.debug("Synced messages after MESSAGES_WAITING")
+    except Exception as e:
+        logger.error(f"Failed to sync messages: {e}")
+
 # ----------------------------------------------------------------------
 # ACK sender (async version)
 # ----------------------------------------------------------------------
@@ -167,6 +175,7 @@ async def run_bridge():
         mc.subscribe(EventType.CONTACT_MSG_RECV, handle_text)
         mc.subscribe(EventType.ADVERTISEMENT, handle_advert)
         mc.subscribe(EventType.TELEMETRY_RESPONSE, handle_stats)
+        mc.subscribe(EventType.MESSAGES_WAITING, handle_messages_waiting)
 
         # Get the current event loop for the forwarder thread
         loop = asyncio.get_running_loop()
