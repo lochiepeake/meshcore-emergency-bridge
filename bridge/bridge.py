@@ -140,7 +140,7 @@ async def stats_poller_async(meshcore):
         await asyncio.sleep(STATS_INTERVAL)
         if meshcore:
             try:
-                await meshcore.commands.get_stats()
+                #COMMENTED OUT DONT FORGETawait meshcore.commands.get_stats()
             except Exception as e:
                 logger.error(f"Stats request failed: {e}")
 
@@ -163,9 +163,9 @@ async def run_bridge():
             continue
 
         # Subscribe to events
-        mc.subscribe(EventType.TEXT_MESSAGE, handle_text)
-        mc.subscribe(EventType.ADVERT, handle_advert)
-        mc.subscribe(EventType.STATS, handle_stats)
+        mc.subscribe(EventType.CONTACT_MSG_RECV, handle_text)
+        mc.subscribe(EventType.ADVERTISMENT, handle_advert)
+        mc.subscribe(EventType.TELEMETRY, handle_stats)
 
         # Get the current event loop for the forwarder thread
         loop = asyncio.get_running_loop()
