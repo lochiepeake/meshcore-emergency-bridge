@@ -10,7 +10,7 @@ def is_emergency(text):
     if match:
         ts = int(match.group(1))
         now = int(time.time())
-        if now - ts > 300:   # older than 5 minutes
+        if now - ts > 604800:   # older than 7 days
             return False
     return True
 
