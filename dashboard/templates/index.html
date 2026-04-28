@@ -13,7 +13,7 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 380px;
+            width: 340px;
             height: 100%;
             background: rgba(30,30,40,0.95);
             backdrop-filter: blur(8px);
@@ -112,7 +112,7 @@
 <body>
     <div id="map"></div>
     <div id="sidebar">
-        <h3>🚨 Emergency Alerts</h3>
+        <h3>Emergency Alerts</h3>
         <div id="emergenciesList">Loading...</div>
     </div>
 
@@ -182,8 +182,8 @@
                 const popupContent = `
                     <div style="min-width:160px;">
                         <b>${em.src}</b><br>
-                        📍 ${em.lat}, ${em.lon}<br>
-                        🕒 ${new Date(em.ts * 1000).toLocaleString()}<br>
+                        Location ${em.lat}, ${em.lon}<br>
+                        Time  ${new Date(em.ts * 1000).toLocaleString()}<br>
                         Status: <span style="color:${em.status === 'success' ? 'green' : (em.status === 'pending' ? 'orange' : 'gray')}">${em.status}</span><br>
                         <select id="statusSelect_${em.id}" style="margin-top:5px;">
                             <option value="pending" ${em.status === 'pending' ? 'selected' : ''}>Pending</option>
@@ -224,8 +224,8 @@
                             <span class="emergency-status ${statusClass}">${em.status}</span>
                         </div>
                         <div class="emergency-details">
-                            📍 ${em.lat}, ${em.lon}<br>
-                            🕒 ${dateStr}
+                            Location ${em.lat}, ${em.lon}<br>
+                            Time ${dateStr}
                         </div>
                         <div class="emergency-actions">
                             <select id="sidebar_status_${em.id}" class="status-select">
