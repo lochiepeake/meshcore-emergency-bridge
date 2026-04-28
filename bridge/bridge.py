@@ -18,6 +18,7 @@ from database import (init_db, store_node, store_breadcrumb, store_emergency,
 from emergency_classifier import is_emergency, parse_sos
 from forwarder import forward_emergency
 from utils import setup_logging
+from ack_generator import send_ack_async
 
 setup_logging(LOG_LEVEL)
 logger = logging.getLogger(__name__)
