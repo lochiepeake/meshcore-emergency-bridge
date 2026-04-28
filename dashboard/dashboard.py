@@ -1,9 +1,8 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request   
 import sqlite3
 import sys
 import os
 
-# Add parent directory to path to import config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bridge.config import DB_PATH
 
@@ -43,12 +42,35 @@ def api_breadcrumbs(pubkey):
 def api_emergencies():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, pubkey, timestamp, parsed_lat, parsed_lon, forwarded_status FROM emergencies ORDER BY timestamp DESC LIMIT 50")
+    # Get all emergencies (no limit for line drawing) but for performance keep limit high
+    cur.execute("SELECT id, pubkey, timestamp, parsed_lat, parsed_lon, forwarded_status FROM emergencies ORDER BY timestamp ASC")
     rows = cur.fetchall()
-    emergencies = [{'id': r['id'], 'src': r['pubkey'][:8], 'ts': r['timestamp'],
-                    'lat': r['parsed_lat'], 'lon': r['parsed_lon'], 'status': r['forwarded_status']} for r in rows]
+    emergencies = []
+    for r in rows:
+        emergencies.append({
+            'id': r['id'],
+            'src': r['pubkey'][:8],          # short for display
+            'full_src': r['pubkey'],          # ✅ full public key for grouping
+            'ts': r['timestamp'],
+            'lat': r['parsed_lat'],
+            'lon': r['parsed_lon'],
+            'status': r['forwarded_status']
+        })
     conn.close()
     return jsonify(emergencies)
+
+@app.route('/api/emergencies/<int:emergency_id>/status', methods=['POST'])
+def update_emergency_status(emergency_id):
+    data = request.get_json()
+    new_status = data.get('status')
+    if not new_status:
+        return jsonify({'error': 'Missing status'}), 400
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE emergencies SET forwarded_status=? WHERE id=?", (new_status, emergency_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'id': emergency_id, 'status': new_status})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=6541, debug=False)
