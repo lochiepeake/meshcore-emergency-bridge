@@ -1,19 +1,19 @@
 import os
 
-# Serial port for MeshCore companion (check with `ls /dev/tty*`)
-SERIAL_PORT = '/dev/ttyUSB0'   # could be /dev/ttyACM0
+# Serial port -- (check with `ls /dev/tty*`)
+SERIAL_PORT = '/dev/ttyUSB0'   
 
 # Database file – absolute path recommended
 DB_PATH = '/home/pi/meshcore-emergency-bridge/data.db'
 
-# External forwarding (set to None if not used)
-FORWARD_HTTP_URL = None        # e.g., 'https://your-server.com/alert'
-FORWARD_SMS_TO = None          # e.g., '+1234567890'
-TWILIO_ACCOUNT_SID = None
-TWILIO_AUTH_TOKEN = None
-TWILIO_FROM = None
+# External forwarding (set to None if not used/ not currently testing)
+FORWARD_HTTP_URL = None      #  
+FORWARD_SMS_TO = None          # change back toNone
+TWILIO_ACCOUNT_SID = None #
+TWILIO_AUTH_TOKEN = None.  #
+TWILIO_FROM = None.  #
 
-FORWARD_MQTT_BROKER = None     # e.g., 'broker.hivemq.com'
+FORWARD_MQTT_BROKER = None     # add to test
 FORWARD_MQTT_PORT = 1883
 FORWARD_MQTT_TOPIC = 'mesh/emergency'
 
