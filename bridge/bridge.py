@@ -41,10 +41,10 @@ def on_text(msg):
         if data['lat'] and data['lon'] and data['lat'] != 0 and data['lon'] != 0:
             w3w_location = convert_coords_to_words(data['lat'], data['lon'])
         # ---------------------------------------------------------
-        msg_id = store_emergency(DB_PATH, msg.src, msg.text,
+        msg_id = store_emergency(DB_PATH, sender, message_text,
                                  data['lat'], data['lon'], data['alt'], data['bat'],
                                  w3w_location)
-        forward_queue.append((msg_id, msg.src, data['lat'], data['lon'], data['bat'], 0))
+        forward_queue.append((msg_id, sender, data['lat'], data['lon'], data['bat'], 0))
         logger.info(f"Emergency stored ID={msg_id}, queued")
 
     elif message_text.startswith('LOC|'):
