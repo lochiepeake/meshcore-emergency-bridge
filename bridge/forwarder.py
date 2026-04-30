@@ -5,6 +5,7 @@ from config import (FORWARD_HTTP_URL, FORWARD_SMS_TO, TWILIO_ACCOUNT_SID,
                      TWILIO_FROM, FORWARD_MQTT_BROKER,
                     FORWARD_MQTT_PORT, FORWARD_MQTT_TOPIC, MAX_RETRIES)
 from dotenv import load_dotenv
+import os
 
 
 logger = logging.getLogger(__name__)
