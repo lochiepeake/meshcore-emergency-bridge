@@ -10,8 +10,8 @@ DB_PATH = '/home/pi/meshcore-emergency-bridge/data.db'
 FORWARD_HTTP_URL = None      #  
 FORWARD_SMS_TO = None          # change back toNone
 TWILIO_ACCOUNT_SID = None #
-TWILIO_AUTH_TOKEN = None.  #
-TWILIO_FROM = None.  #
+TWILIO_AUTH_TOKEN = None  #
+TWILIO_FROM = None  #
 
 FORWARD_MQTT_BROKER = None     # add to test
 FORWARD_MQTT_PORT = 1883
