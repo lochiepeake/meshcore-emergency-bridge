@@ -48,7 +48,7 @@ def forward_emergency(pubkey, lat, lon, bat):
 
     # SMS forwarding (Twilio)
     if FORWARD_SMS_TO and TWILIO_ACCOUNT_SID and TWILIO_AVAILABLE:
-        logger.info(f"SMS forwarder is active! Trying to send to {FORWARD_SMS_TO}"
+        logger.info(f"SMS forwarder is active! Trying to send to {FORWARD_SMS_TO}")
         try:
             client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
             logger.info("Twilio client object created successfully.")
