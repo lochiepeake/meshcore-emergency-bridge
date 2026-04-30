@@ -3,7 +3,7 @@ import logging
 import what3words
 import os
 from dotenv import load_dotenv
-from config import W3W_API_KEY
+
 
 from decouple import config
 
