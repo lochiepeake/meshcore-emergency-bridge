@@ -4,7 +4,7 @@ import os
 SERIAL_PORT = '/dev/ttyUSB0'   
 
 # Database file – absolute path recommended
-DB_PATH = '/home/pi/meshcore-emergency-bridge/data.db'
+DB_PATH = '/home/pibridge/meshcore-emergency-bridge/data.db'
 
 # External forwarding (set to None if not used/ not currently testing)
 FORWARD_HTTP_URL = None      #  
