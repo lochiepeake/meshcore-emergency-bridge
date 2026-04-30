@@ -29,7 +29,7 @@ def convert_coords_to_words(lat, lon):
         return None
     try:
         # The API expects a tuple of (latitude, longitude)
-        result = geocoder.convert_to_3wa(what3words.Coordinates(lat, lon))
+        result = w3w.convert_to_3wa(what3words.Coordinates(lat, lon))
         # The 3 word address is returned in the 'words' key
         words = result.get('words')
         if words:
