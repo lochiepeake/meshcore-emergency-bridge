@@ -192,7 +192,7 @@
                     <div style="min-width:160px;">
                         <b>${em.src}</b><br>
                         Location: ${em.lat}, ${em.lon}<br>
-                        w3w: ${w3wDisplay}
+                        ${w3wDisplay}
                         Time:  ${new Date(em.ts * 1000).toLocaleString()}<br>
                         Status: <span style="color:${em.status === 'success' ? 'green' : (em.status === 'pending' ? 'orange' : 'gray')}">${em.status}</span><br>
                         <select id="statusSelect_${em.id}" style="margin-top:5px;">
@@ -236,7 +236,7 @@
                         </div>
                         <div class="emergency-details">
                             Location:${em.lat}, ${em.lon}<br>
-                            Time: ${dateStr}
+                            Time: ${dateStr}<br>
                             w3w: ${w3wDisplay}
                         </div>
                         <div class="emergency-actions">
