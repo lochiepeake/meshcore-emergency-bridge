@@ -9,8 +9,7 @@ DB_PATH = '/home/pibridge/meshcore-emergency-bridge/data.db'
 # External forwarding (set to None if not used/ not currently testing)
 FORWARD_HTTP_URL = None      #  
 FORWARD_SMS_TO = None          # change back toNone
-TWILIO_ACCOUNT_SID = None #
-TWILIO_AUTH_TOKEN = None  #
+
 TWILIO_FROM = None  #
 
 FORWARD_MQTT_BROKER = None     # add to test

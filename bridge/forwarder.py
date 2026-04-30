@@ -2,10 +2,16 @@ import logging
 import time
 import requests
 from config import (FORWARD_HTTP_URL, FORWARD_SMS_TO, TWILIO_ACCOUNT_SID,
-                    TWILIO_AUTH_TOKEN, TWILIO_FROM, FORWARD_MQTT_BROKER,
+                     TWILIO_FROM, FORWARD_MQTT_BROKER,
                     FORWARD_MQTT_PORT, FORWARD_MQTT_TOPIC, MAX_RETRIES)
+from dotenv import load_dotenv
+
 
 logger = logging.getLogger(__name__)
+env_path = '/home/pibridge/meshcore-emergency-bridge/.env'
+load_dotenv(dotenv_path=env_path)
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
+
 
 # Optional imports – fail gracefully if libraries missing
 try:
@@ -42,8 +48,10 @@ def forward_emergency(pubkey, lat, lon, bat):
 
     # SMS forwarding (Twilio)
     if FORWARD_SMS_TO and TWILIO_ACCOUNT_SID and TWILIO_AVAILABLE:
+        logger.info(f"SMS forwarder is active! Trying to send to {FORWARD_SMS_TO}"
         try:
             client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            logger.info("Twilio client object created successfully.")
             message_body = f"EMERGENCY from {pubkey}\nLocation: {lat},{lon}\nBattery: {bat}mV"
             msg = client.messages.create(
                 body=message_body,
