@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 #get w3w API ket from .env file
-env_path = Path('/home/pibridge/meshcore-emergency-bridge/.env')
+env_path = '/home/pibridge/meshcore-emergency-bridge/.env'
 load_dotenv(dotenv_path=env_path)
 W3W_API_KEY = os.getenv('W3W_API_KEY')
 
