@@ -18,7 +18,7 @@ if not W3W_API_KEY:
     logger.error("W3W_API_KEY not found in environment. Please check your .env file.")
 else:
     # initialize  what3words API client 
-    w3w = what3words.geocoder.Geocoder(W3W_API_KEY)
+    w3w = what3words.Geocoder(W3W_API_KEY)
 
 def convert_coords_to_words(lat, lon):
     """
