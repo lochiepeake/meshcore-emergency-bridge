@@ -42,19 +42,19 @@ def api_breadcrumbs(pubkey):
 def api_emergencies():
     conn = get_db()
     cur = conn.cursor()
-    # Get all emergencies (no limit for line drawing) but for performance keep limit high
-    cur.execute("SELECT id, pubkey, timestamp, parsed_lat, parsed_lon, forwarded_status FROM emergencies ORDER BY timestamp ASC")
+    cur.execute("SELECT id, pubkey, timestamp, parsed_lat, parsed_lon, forwarded_status, w3w_location FROM emergencies ORDER BY timestamp ASC")
     rows = cur.fetchall()
     emergencies = []
     for r in rows:
         emergencies.append({
             'id': r['id'],
-            'src': r['pubkey'][:8],          # short for display
-            'full_src': r['pubkey'],          # ✅ full public key for grouping
+            'src': r['pubkey'][:8],
+            'full_src': r['pubkey'],
             'ts': r['timestamp'],
             'lat': r['parsed_lat'],
             'lon': r['parsed_lon'],
-            'status': r['forwarded_status']
+            'status': r['forwarded_status'],
+            'w3w': r['w3w_location'] 
         })
     conn.close()
     return jsonify(emergencies)

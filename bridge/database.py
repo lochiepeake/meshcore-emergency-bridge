@@ -44,7 +44,8 @@ def init_db(db_path):
         battery_mv INTEGER,
         forwarded_status TEXT,
         ack_sent INTEGER DEFAULT 0,
-        retries INTEGER DEFAULT 0
+        retries INTEGER DEFAULT 0,
+        w3w_location TEXT
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS telemetry (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,18 +99,16 @@ def store_breadcrumb(db_path, pubkey, lat, lon, alt=None, bat=None,
     conn.commit()
     conn.close()
 
-def store_emergency(db_path, pubkey, raw_msg, lat, lon, alt=None, bat=None):
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute('''INSERT INTO emergencies
-                   (pubkey, timestamp, raw_message, parsed_lat, parsed_lon,
-                    parsed_alt, battery_mv, forwarded_status)
-                   VALUES (?,?,?,?,?,?,?,?)''',
-                (pubkey, int(time.time()), raw_msg, lat, lon, alt, bat, 'pending'))
-    conn.commit()
-    msg_id = cur.lastrowid
-    conn.close()
-    return msg_id
+def store_emergency(db_path, pubkey, raw_msg, lat, lon, alt=None, bat=None, w3w_location=None):
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute('''INSERT INTO emergencies
+                       (pubkey, timestamp, raw_message, parsed_lat, parsed_lon,
+                        parsed_alt, battery_mv, forwarded_status, w3w_location)
+                       VALUES (?,?,?,?,?,?,?,?,?)''',
+                    (pubkey, int(time.time()), raw_msg, lat, lon, alt, bat, 'pending', w3w_location))
+        conn.commit()
+        return cur.lastrowid
 
 def update_emergency_status(db_path, msg_id, status):
     conn = sqlite3.connect(db_path)

@@ -8,6 +8,7 @@ import sys
 import os
 from meshcore import MeshCore, EventType
 from serial import SerialException
+from w3w_lookup import convert_coords_to_words
 
 # Add parent directory to path if needed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,12 +34,16 @@ def on_text(msg):
     message_text = msg.get('text', '')
     logger.info(f"TXT from {sender}: {message_text}")
 
-    if is_emergency(message_text):
-        data = parse_sos(message_text)
-        msg_id = store_emergency(DB_PATH, sender, message_text,
-                                 data['lat'], data['lon'], data['alt'], data['bat'])
-        forward_queue.append((msg_id, sender, data['lat'], data['lon'], data['bat'], 0))
-        logger.info(f"Emergency stored ID={msg_id}, queued")
+    elif is_emergency(msg.text):
+    data = parse_sos(msg.text)
+    # --- Add this new code block for what3words conversion ---
+    w3w_location = None
+    if data['lat'] and data['lon'] and data['lat'] !=0 and data['lon'] != 0:
+        w3w_location = convert_coords_to_words(data['lat'], data['lon'])
+    # ---------------------------------------------------------
+    msg_id = store_emergency(DB_PATH, msg.src, msg.text,
+                             data['lat'], data['lon'], data['alt'], data['bat'],
+                             w3w_location)  # <--- Pass the new value
 
     elif message_text.startswith('LOC|'):
         data = parse_sos(message_text)
