@@ -1,12 +1,24 @@
 # w3w_lookup.py
 import logging
 import what3words
+import os
+from dotenv import load_dotenv
 from config import W3W_API_KEY
+
+from decouple import config
 
 logger = logging.getLogger(__name__)
 
-# Initialize the what3words API client
-w3w = what3words.geocoder.Geocoder(W3W_API_KEY)
+#get w3w API ket from .env file
+env_path = Path('/home/pibridge/meshcore-emergency-bridge/.env')
+load_dotenv(dotenv_path=env_path)
+W3W_API_KEY = os.getenv('W3W_API_KEY')
+
+if not W3W_API_KEY:
+    logger.error("W3W_API_KEY not found in environment. Please check your .env file.")
+else:
+    # initialize  what3words API client 
+    w3w = what3words.geocoder.Geocoder(W3W_API_KEY)
 
 def convert_coords_to_words(lat, lon):
     """
