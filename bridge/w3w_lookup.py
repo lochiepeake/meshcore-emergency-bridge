@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 
-from decouple import config
+
 
 logger = logging.getLogger(__name__)
 
