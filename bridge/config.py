@@ -7,10 +7,11 @@ SERIAL_PORT = '/dev/ttyUSB0'
 DB_PATH = '/home/pibridge/meshcore-emergency-bridge/data.db'
 
 # External forwarding (set to None if not used/ not currently testing)
-FORWARD_HTTP_URL = None      #  
-FORWARD_SMS_TO = None          # change back toNone
+FORWARD_HTTP_URL = None      # change back toNone
 
-TWILIO_FROM = None  #
+FORWARD_SMS_TO = "whatsapp:+447436840986"         
+TWILIO_ACCOUNT_SID = "AC525f8411a5a1219325127c185d9a3bc6"
+TWILIO_FROM = "whatsapp:+14155238886"
 
 FORWARD_MQTT_BROKER = None     # add to test
 FORWARD_MQTT_PORT = 1883
