@@ -2,7 +2,7 @@ from twilio.rest import Client
 from dotenv import load_dotenv
 import os
 
-account_sid = "AC525f8411a5a1219325127c185d9a3bc6"
+
 env_path = '/home/pibridge/meshcore-emergency-bridge/.env'
 load_dotenv(dotenv_path=env_path)
 auth_token = os.getenv('TWILIO_AUTH_TOKEN')
