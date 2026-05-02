@@ -6,11 +6,14 @@ from config import (FORWARD_HTTP_URL, FORWARD_SMS_TO, TWILIO_ACCOUNT_SID,
                     FORWARD_MQTT_PORT, FORWARD_MQTT_TOPIC, MAX_RETRIES)
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
-env_path = '/home/pibridge/meshcore-emergency-bridge/.env'
-load_dotenv(dotenv_path=env_path)
+
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
+
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
 
 
