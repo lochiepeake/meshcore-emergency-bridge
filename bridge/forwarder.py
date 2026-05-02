@@ -32,6 +32,7 @@ except ImportError:
 def forward_emergency(pubkey, lat, lon, bat):
     """Attempt to forward emergency to all configured external services.
        Returns True if at least one succeeded."""
+    logger.info("forward_emergency called!")
     success = False
     payload = {'src': pubkey, 'lat': lat, 'lon': lon, 'battery_mv': bat, 'timestamp': int(time.time())}
 

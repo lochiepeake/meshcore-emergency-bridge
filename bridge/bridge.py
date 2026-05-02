@@ -93,31 +93,35 @@ async def send_ack_async(meshcore, dest_pubkey, msg_id):
         return False
 
 def forward_worker(loop, meshcore_ref):
+    logger.info("Forward worker thread started.")  
     while True:
-        if forward_queue:
-            item = forward_queue.pop(0)
-            msg_id, pubkey, lat, lon, bat, retries = item
-            success = forward_emergency(pubkey, lat, lon, bat)
-            if success:
-                update_emergency_status(DB_PATH, msg_id, 'success')
-                if meshcore_ref:
-                    asyncio.run_coroutine_threadsafe(
-                        send_ack_async(meshcore_ref, pubkey, msg_id),
-                        loop
-                    )
-            else:
-                new_retries = increment_emergency_retries(DB_PATH, msg_id)
-                if new_retries <= MAX_RETRIES:
-                    delay = RETRY_DELAYS[min(new_retries-1, len(RETRY_DELAYS)-1)]
-                    logger.info(f"Retry {new_retries} for emergency {msg_id} in {delay} seconds")
-                    def delayed_retry():
-                        time.sleep(delay)
-                        forward_queue.append((msg_id, pubkey, lat, lon, bat, new_retries))
-                    threading.Thread(target=delayed_retry, daemon=True).start()
+        try:
+            if forward_queue:
+                item = forward_queue.pop(0)
+                msg_id, pubkey, lat, lon, bat, retries = item
+                success = forward_emergency(pubkey, lat, lon, bat)
+                if success:
+                    update_emergency_status(DB_PATH, msg_id, 'success')
+                    if meshcore_ref:
+                        asyncio.run_coroutine_threadsafe(
+                            send_ack_async(meshcore_ref, pubkey, msg_id),
+                            loop
+                        )
                 else:
-                    logger.error(f"Emergency {msg_id} failed after {MAX_RETRIES} retries")
-                    update_emergency_status(DB_PATH, msg_id, 'failed')
-        time.sleep(1)
+                    new_retries = increment_emergency_retries(DB_PATH, msg_id)
+                    if new_retries <= MAX_RETRIES:
+                        delay = RETRY_DELAYS[min(new_retries-1, len(RETRY_DELAYS)-1)]
+                        logger.info(f"Retry {new_retries} for emergency {msg_id} in {delay} seconds")
+                        def delayed_retry():
+                            time.sleep(delay)
+                            forward_queue.append((msg_id, pubkey, lat, lon, bat, new_retries))
+                        threading.Thread(target=delayed_retry, daemon=True).start()
+                    else:
+                        logger.error(f"Emergency {msg_id} failed after {MAX_RETRIES} retries")
+                        update_emergency_status(DB_PATH, msg_id, 'failed')
+            time.sleep(1)
+        except Exception as e:
+            logger.error(f"Forward worker crashed: {e}", exc_info=True)
 
 async def stats_poller_async(meshcore):
     while True:
@@ -148,6 +152,7 @@ async def run_bridge():
 
         loop = asyncio.get_running_loop()
         threading.Thread(target=forward_worker, args=(loop, mc), daemon=True).start()
+        logger.info("Forward worker thread launched.")
         asyncio.create_task(stats_poller_async(mc))
 
         logger.info("Bridge started. Waiting for events...")
