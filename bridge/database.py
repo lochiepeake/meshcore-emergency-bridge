@@ -116,17 +116,16 @@ def update_emergency_status(db_path, msg_id, status):
         cur = conn.cursor()
         cur.execute("UPDATE emergencies SET forwarded_status=? WHERE id=?", (status, msg_id))
         conn.commit()
-        conn.close()
+        
 
 def increment_emergency_retries(db_path, msg_id):
     with sqlite3.connect(db_path) as conn:
         cur = conn.cursor()
         cur.execute("UPDATE emergencies SET retries=retries+1 WHERE id=?", (msg_id,))
-        conn.commit()
-        conn.close()
+       
         cur.execute("SELECT retries FROM emergencies WHERE id=?", (msg_id,))
         retries = cur.fetchone()[0]
-        conn.close()
+        conn.commit()
         return retries
 
 def store_telemetry(db_path, pubkey, bat, uptime, queue_len, noise,
@@ -142,4 +141,4 @@ def store_telemetry(db_path, pubkey, bat, uptime, queue_len, noise,
                     (pubkey, int(time.time()), bat, uptime, queue_len, noise,
                     rssi, snr, tx_air, rx_air, flood_tx, direct_tx, flood_rx, direct_rx))
         conn.commit()
-        conn.close()
+        
