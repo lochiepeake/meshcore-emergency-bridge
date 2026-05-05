@@ -9,9 +9,9 @@ DB_PATH = '/home/pibridge/meshcore-emergency-bridge/data.db'
 # External forwarding (set to None if not used/ not currently testing)
 FORWARD_HTTP_URL ="https://eo2kx5eo49lfovz.m.pipedream.net"
 
-FORWARD_SMS_TO = "whatsapp:+447436840986"         
+FORWARD_SMS_TO = "+447436840986"         
 TWILIO_ACCOUNT_SID = "AC525f8411a5a1219325127c185d9a3bc6"
-TWILIO_FROM = "whatsapp:+14155238886"
+TWILIO_FROM = "+447460958598"
 
 FORWARD_MQTT_BROKER = None     # add to test
 FORWARD_MQTT_PORT = 1883
